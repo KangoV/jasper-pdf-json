@@ -1,0 +1,109 @@
+plugins {
+    id "com.github.johnrengelman.shadow" version "5.2.0"
+	id 'pl.allegro.tech.build.axion-release' version '1.10.2'
+	id "com.palantir.graal" version "0.6.0-40-gcf1a84c" 
+    id "application"
+}
+  
+scmVersion {
+	versionCreator System.getenv('USE_BRANCH_VERSION') != null ? 'versionWithBranch' : 'simple'
+	versionIncrementer 'incrementMinor' // default=incrementPatch
+	ignoreUncommittedChanges = false
+	branchVersionIncrementer = [
+	  'hotfix/.*'  : { c -> c.currentVersion.incrementPatchVersion() },
+	  'release/.*' : 'incrementMinorIfNotOnRelease'
+	]
+	hooks {
+		pre 'fileUpdate', [file: 'README.md', pattern: {v, c -> /version: $v/}, replacement: {v, c -> "vers/ion: $v"}]
+		pre 'commit'
+	}
+	localOnly = true
+}
+
+project.version = scmVersion.version
+group "org.belldj"
+
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
+repositories {
+    mavenCentral()
+    maven { url "https://jcenter.bintray.com" }
+    maven { url 'http://jaspersoft.artifactoryonline.com/jaspersoft/third-party-ce-artifacts/' }
+}
+
+configurations {
+    // for dependencies that are needed for development only
+    developmentOnly 
+}
+
+dependencies {
+
+  implementation group: 'commons-codec',        name: 'commons-codec', version: '1.9'
+  implementation group: 'org.apache.commons',   name: 'commons-io',    version: '1.3.2'
+  implementation group: 'org.apache.poi',       name: 'poi',           version: '3.10.1'
+  implementation group: 'net.sf.jasperreports', name: 'jasperreports', version: '6.11.0'
+  
+  testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+  testRuntimeOnly    'org.junit.jupiter:junit-jupiter-engine:5.3.1'
+    
+}
+
+test.classpath += configurations.developmentOnly
+
+mainClassName = "org.belldj.mntest.Application"
+
+// use JUnit 5 platform
+test { 
+	useJUnitPlatform()
+	jvmArgs '--enable-preview'
+}
+
+shadowJar { mergeServiceFiles() }
+
+run.classpath += configurations.developmentOnly
+run.jvmArgs('-noverify', '-XX:TieredStopAtLevel=1', '-Dcom.sun.management.jmxremote', '--enable-preview')
+
+tasks.withType(JavaCompile){
+  options.encoding = "UTF-8"
+  options.compilerArgs.add('-parameters')
+  options.compilerArgs.add('--enable-preview')
+}
+
+jar {
+  manifest {
+    attributes 'Implementation-Title': project.name, 'Implementation-Version': project.version
+  }
+}
+
+java {
+	withJavadocJar()
+	withSourcesJar()
+}
+
+javadoc {
+  source = sourceSets.main.allJava
+  classpath = configurations.compileClasspath
+  options {
+    setMemberLevel JavadocMemberLevel.PUBLIC
+    setAuthor true
+    links "https://docs.oracle.com/en/java/javase/8/docs/api/"
+    failOnError = false
+  }
+}
+
+graal {
+	graalVersion '19.3'
+	mainClass 'org.belldj.mntest.Application'
+	outputName 'mntest'
+	option '-H:+TraceClassInitialization'
+	option '-H:+ReportExceptionStackTraces'	
+	option '--allow-incomplete-classpath'
+	option '--initialize-at-build-time=org.h2.Driver'
+	option '--initialize-at-build-time=org.postgresql.Driver'
+	option '--initialize-at-build-time=org.postgresql.util.SharedTimer'
+	option '--report-unsupported-elements-at-runtime'
+}
+
+
+
